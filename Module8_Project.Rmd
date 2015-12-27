@@ -1,0 +1,122 @@
+---
+title: "Practical Machine Learning Project"
+author: "Diong Wei Liam"
+date: "Sunday, December 27, 2015"
+output: html_document
+---
+## Background
+### Project Objectives
+The goal of this project is to predict the manner in which the participants did the exercise, where "classe" is the outcome variable in the data. This report will show the variables used to predict, building prediction model, using cross-validation and analyzing the out of sample error. The model will also be used to predict the 20 different test cases in the test data.
+
+### Building the Model
+The outcome variable "classe", is a factor variable with 5 levels. For this data set, participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions:
+
+* Exactly according to the specification (Class A)
+* Throwing the elbows to the front (Class B)
+* Lifting the dumbbell only halfway (Class C)
+* Lowering the dumbbell only halfway (Class D)
+* Throwing the hips to the front (Class E)?
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Prediction evaluations will be based on maximizing the accuracy and minimizing the out-of-sample error. All other available variables after cleaning will be used for prediction. Two models will be tested using decision tree and random forest algorithms. The model with the highest accuracy will be chosen as our final model.
+
+### Cross Validation
+We will perform cross validation to the training data set by splitting into two subsamples
+* subTraining Data (60% of original Training data set)
+* subTest Data (40% of original Training data set)
+
+The models will be fitted using the subTraining data set and tested on the subTest data set. We will then use the model that produce more accurate results to be tested on the original Testing data set.
+
+### Expected Out of Sample Error
+Accuracy is the percentage of the correctly classified observations (true positive and true negative) over the total sample in the data. The expected out of sample error corresponds to 1-Accuracy in the cross-validation data. The higher the Accuract, the lower the out of sample errror rate. We will use this as the criteria to pick the final model.
+
+## Packages, Libraries and Seed
+Load the required packages and libraries
+```{r warning=FALSE, message=FALSE}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+```
+
+Set seed for reproduceability
+```{r}
+set.seed(1234)
+```
+
+## Getting data and cleaning data
+Set the source to get training data and testing data, and load into memory
+```{r}
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+```
+
+
+Variables related with data acquisition (like: id, timestamps, individuals' names, etc.) are not suitable to be used in prediction and are removed.
+```{r}
+training   <-training[,-c(1:7)]
+testing <-testing[,-c(1:7)]
+```
+
+Delete columns with all missing values
+```{r}
+training <-training[,colSums(is.na(training)) == 0]
+testing <-testing[,colSums(is.na(testing)) == 0]
+```
+
+Partition the training data into 2 for cross validation. 60% for myTraining, 40% for myTesting
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.6, list=FALSE)
+myTraining <- training[inTrain, ]
+myTesting <- training[-inTrain, ]
+dim(myTraining)
+dim(myTesting)
+```
+11776 observations with 53 variables in myTraining
+7846 observations with 53 variables in myTesting
+
+## First Prediction Mode: Decision Tree
+
+```{r}
+model1 <- train(classe ~ .,method="rpart",data=myTraining)
+prediction1 <- predict(model1, newdata=myTesting)
+fancyRpartPlot(model1$finalModel)
+confusionMatrix(prediction1, myTesting$classe)
+```
+The accuracy for Model 1 is 0.5539
+
+## Second Prediction Mode: Random Forest
+
+```{r}
+model2 <- train(classe ~ .,method="rf",data=myTraining)
+prediction2 <- predict(model2, newdata=myTesting)
+confusionMatrix(prediction2, myTesting$classe)
+```
+The accuracy for Model 2 is 0.9931
+
+## Conclusion
+As expected, Model 2 using Random Forest yield a better prediction result compared to Model 1 using Decision Tree. Hence, the **Random Forest model is chosen**. The accuracy of Model 2 is 0.9931 (99.31%) with the out-of-sample error at 0.0069 (0.69%).
+
+## Generating Files for Submission
+The following codes will generate 20 individual files to predict the outcome of the original testing data using Model 2 (Random Forest).
+```{r}
+predictionfinal <- predict(model2, newdata=testing)
+predictionfinal
+```
+
+To write files for submission
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictionfinal)
+```
